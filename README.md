@@ -3,8 +3,9 @@ A POC trading bot for Pancakeswap. Intended as an educational exploration of scr
 
 ## Usage
 
-1. Copy `env.template` to `.env`
-2. Edit the variables in `.env`
-3. Run the bot with `node bot`
-4. ???
-5. Profit?
+1. Run `npm ci` to install the dependencies
+2. Copy `env.template` to `.env`
+3. Edit the variables in `.env`
+4. Run the bot with `node bot`
+5. ???
+6. Profit?
