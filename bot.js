@@ -2,6 +2,9 @@ import ethers from 'ethers'
 import chalk from 'chalk'
 import dotenv from 'dotenv'
 
+import { readFile } from 'fs/promises'
+const PCS_ABI = JSON.parse(await readFile(new URL('./abi/pancakeswap.json', import.meta.url)))
+
 dotenv.config()
 
 const config = {
@@ -38,17 +41,7 @@ const factory = new ethers.Contract(
     account
 );
   
-const router = new ethers.Contract(
-    config.router,
-    [
-        'function getAmountsOut(uint amountIn, address[] memory path) public view returns (uint[] memory amounts)',
-        'function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)',
-        'function swapExactTokensForTokensSupportingFeeOnTransferTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)',
-        'function swapETHForExactTokens(uint amountOut, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)',
-        'function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)',
-    ],
-    account
-);
+const router = new ethers.Contract( config.router, PCS_ABI, account )
   
 const erc = new ethers.Contract(
     config.bnb,
@@ -138,13 +131,11 @@ async function buyAction(buyQuantity) {
                 'nonce' : null,
                 'value' : amountIn
             })
-
         const receipt = await tx.wait()
-        let receiptLog = receipt.logs[receipt.logs.length - 1]
-        let txData = ethers.utils.base64.decode(receiptLog.data)
-        console.log(txData)
-        console.log(`Transaction receipt : https://www.bscscan.com/tx/${receipt.logs[1].transactionHash}`)
-        return txData.amount1Out
+        let buyValue = ethers.utils.formatEther(tx.value)
+        console.log(buyValue)
+        console.log(`Transaction receipt : https://www.bscscan.com/tx/${receipt.transactionHash}`)
+        return buyValue
     } catch(err) {
         console.error(err)
     }
@@ -181,7 +172,7 @@ async function sellAction(sellQuantity) {
         console.log(chalk.yellow(`config.gasLimit: ${config.gasLimit}`))
         console.log(chalk.yellow(`config.gasPrice: ${config.gasPrice}`))
 
-        const tx = await router.swapExactETHForTokens(
+        const tx = await router.swapExactTokensForETH(
             amountOutMin,
             [tokenBase, tokenQuote],
             config.recipient,
