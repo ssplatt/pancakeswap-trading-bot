@@ -26,8 +26,8 @@ let jmlBnb = 0
 
 const wss = process.env.WSS_NODE
 const mnemonic = process.env.YOUR_MNEMONIC
-const tokenQuote = config.bnb
-const tokenBase = config.toPurchase
+const tokenIn = config.bnb
+const tokenOut = config.toPurchase
 const provider = new ethers.providers.WebSocketProvider(wss)
 const wallet = new ethers.Wallet.fromMnemonic(mnemonic)
 const account = wallet.connect(provider)
@@ -55,7 +55,7 @@ const run = async () => {
 }
 
 let checkLiq = async() => {
-    const pairAddressx = await factory.getPair(tokenQuote, tokenBase)
+    const pairAddressx = await factory.getPair(tokenIn, tokenOut)
     console.log(chalk.blue(`pairAddress: ${pairAddressx}`))
     if (pairAddressx !== null && pairAddressx !== undefined) {
         if (pairAddressx.toString().indexOf('0x0000000000000') > -1) {
@@ -78,6 +78,9 @@ let checkLiq = async() => {
         console.log('[INFO] run again...')
         return await run()
     }
+
+    await sleep(config.tradeInterval)
+    
     if (bought > 0) {
         console.log('[INFO] initiating sell...')
         sold = await sellAction(bought)
@@ -98,31 +101,31 @@ async function buyAction(buyQuantity) {
         let amountOutMin = 0
         const amountIn = ethers.utils.parseEther(buyQuantity)
         if ( parseInt(config.slippage) !== 0 ){
-            const amounts = await router.getAmountsOut(amountIn, [tokenQuote, tokenBase])
+            const amounts = await router.getAmountsOut(amountIn, [tokenIn, tokenOut])
             amountOutMin = amounts[1].sub(amounts[1].div(`${config.slippage}`))
         }
 
         console.log(
-        chalk.green.inverse('Start to buy \n')
-        +
-        `Buying Token
-        =================
-        tokenQuote: ${(amountIn * 1e-18).toString()} ${tokenQuote} (BNB)
-        tokenBase: ${amountOutMin.toString()} ${tokenBase}
+            chalk.green.inverse('Start to buy \n')
+            +
+            `Buying Token using BNB
+            =================
+            tokenIn: ${(amountIn * 1e-18).toString()} ${tokenIn} (BNB)
+            tokenOut: ${(amountOutMin* 1e-18).toString()} ${tokenOut} (SA)
         `);
 
         console.log('Processing Transaction.....')
-        console.log(chalk.yellow(`amountIn: ${(amountIn * 1e-18)} ${tokenQuote} (BNB)`))
-        console.log(chalk.yellow(`amountOutMin: ${amountOutMin}`))
-        console.log(chalk.yellow(`tokenBase: ${tokenBase}`))
-        console.log(chalk.yellow(`tokenQuote: ${tokenQuote} (BNB)`))
+        console.log(chalk.yellow(`amountIn: ${(amountIn * 1e-18)} ${tokenIn} (BNB)`))
+        console.log(chalk.yellow(`amountOutMin: ${amountOutMin} (SA)`))
+        console.log(chalk.yellow(`tokenIn: ${tokenIn} (BNB)`))
+        console.log(chalk.yellow(`tokenOut: ${tokenOut} (SA)`))
         console.log(chalk.yellow(`config.recipient: ${config.recipient}`))
         console.log(chalk.yellow(`config.gasLimit: ${config.gasLimit}`))
         console.log(chalk.yellow(`config.gasPrice: ${config.gasPrice}`))
 
         const tx = await router.swapExactETHForTokens(
             amountOutMin,
-            [tokenQuote, tokenBase],
+            [tokenIn, tokenOut],
             config.recipient,
             Date.now() + 1000 * 60 * 5, //5 minutes
             {
@@ -132,64 +135,60 @@ async function buyAction(buyQuantity) {
                 'value' : amountIn
             })
         const receipt = await tx.wait()
-        let buyValue = ethers.utils.formatEther(tx.value)
-        console.log(buyValue)
+        console.log(tx)
         console.log(`Transaction receipt : https://www.bscscan.com/tx/${receipt.transactionHash}`)
-        return buyValue
+        return ethers.utils.formatEther(amountOutMin)
     } catch(err) {
         console.error(err)
     }
 }
 
 async function sellAction(sellQuantity) {
-    // reverse In and Out: token -> BNB
+    // tokenOut (SA) -> tokenIn (BNB)
     console.log('[INFO] ready to sell')
     try {
-        await sleep(config.tradeInterval)
-
-        let amountOutMin = 0
-        const amountIn = ethers.utils.parseEther(sellQuantity)
+        let amountInMin = 0
+        const amountOut = ethers.utils.parseEther(sellQuantity)
         if ( parseInt(config.slippage) !== 0 ){
-            const amounts = await router.getAmountsOut(amountIn, [tokenBase, tokenQuote])
-            amountOutMin = amounts[1].sub(amounts[1].div(`${config.slippage}`))
+            const amounts = await router.getAmountsIn(amountOut, [tokenIn, tokenOut])
+            amountInMin = amounts[0].sub(amounts[0].div(`${config.slippage}`))
         }
 
         console.log(
-        chalk.green.inverse('Start to sell \n')
-        +
-        `Selling Base Token
-        =================
-        tokenBase: ${(amountIn * 1e-18).toString()} ${tokenBase}
-        tokenQuote: ${amountOutMin.toString()} ${tokenQuote} (BNB)
+            chalk.green.inverse('Start to sell \n')
+            +
+            `Selling Token for BNB
+            =================
+            tokenOut: ${(amountOut * 1e-18).toString()} ${tokenOut} (SA)
+            tokenIn: ${(amountInMin * 1e-18).toString()} ${tokenIn} (BNB)
         `);
 
         console.log('Processing Transaction.....')
-        console.log(chalk.yellow(`amountIn: ${(amountIn * 1e-18)} ${tokenBase} `))
-        console.log(chalk.yellow(`amountOutMin: ${amountOutMin} (BNB)`))
-        console.log(chalk.yellow(`tokenBase: ${tokenBase}`))
-        console.log(chalk.yellow(`tokenQuote: ${tokenQuote} (BNB)`))
-        console.log(chalk.yellow(`config.recipient: ${config.recipient}`))
-        console.log(chalk.yellow(`config.gasLimit: ${config.gasLimit}`))
-        console.log(chalk.yellow(`config.gasPrice: ${config.gasPrice}`))
+        console.log(chalk.yellow(`
+amountOut: ${amountOut} (SA)
+amountInMin: ${amountInMin} (BNB)
+tokenOut: ${tokenOut} (SA)
+tokenIn: ${tokenIn} (BNB)
+config.recipient: ${config.recipient}
+config.gasLimit: ${config.gasLimit}
+config.gasPrice: ${config.gasPrice}
+`))
 
         const tx = await router.swapExactTokensForETH(
-            amountOutMin,
-            [tokenBase, tokenQuote],
+            amountOut,
+            amountInMin,
+            [tokenOut, tokenIn],
             config.recipient,
             Date.now() + 1000 * 60 * 5, //5 minutes
             {
                 'gasLimit': config.gasLimit,
-                'gasPrice': config.gasPrice,
-                'nonce' : null,
-                'value' : amountIn
+                'gasPrice': config.gasPrice
             })
 
         const receipt = await tx.wait()
-        let receiptLog = receipt.logs[receipt.logs.length - 1]
-        let txData = ethers.utils.base58.decode(receiptLog.data)
-        console.log(txData)
-        console.log(`Transaction receipt : https://www.bscscan.com/tx/${receipt.logs[1].transactionHash}`)
-        return txData.amount1Out
+        console.log(tx)
+        console.log(`Transaction receipt : https://www.bscscan.com/tx/${receipt.transactionHash}`)
+        return ethers.utils.formatEther(amountInMin)
     } catch (err) {
         console.error(err)
     }
