@@ -52,7 +52,11 @@ const erc = new ethers.Contract(
 
 async function run() {
     console.log('[INFO] RUNNING. Press ctrl+C to exit.')
-    await checkLiq()
+    try {
+        await checkLiq()
+    } catch (err) {
+        console.error(err)
+    }
     console.log('[INFO] Done.')
 }
 
@@ -70,9 +74,10 @@ async function checkLiq() {
     console.log('value BNB:', jmlBnb)
     let toBuyValue = config.amountOfBnb
     let toSellValue = 0
-    let balance = checkBalance(account)
+    let balance = await checkBalance(account)
 
     while (balance > config.walletMinBnb) {
+        console.log('begin main loop')
         if (parseFloat(jmlBnb) > parseFloat(config.minBnbLiq)) {
             console.log('toBuyValue =', toBuyValue)
             console.log('toSellValue =', toSellValue)
@@ -92,20 +97,22 @@ async function checkLiq() {
             while (waitCount < config.tradeInterval) {
                 await sleep()
                 waitCount++
+                console.log(waitCount)
             }
             spinner.stop()
+            console.log('done sleeping')
             balance = await checkBalance(account)
-        } else {
-            console.log('[INFO] not enough liquidity, run again...')
-            return await run()
         }
+        console.log('looping again')
     }
+    console.log('out of the buy-sell loop')
 }
 
 async function checkBalance(account) {
     let balance = await account.getBalance()
-    console.log(chalk.magenta(`[INFO] wallet balance: ${ethers.utils.formatEther(balance)} BNB`))
-    return balance
+    let humanBalance = ethers.utils.formatEther(balance)
+    console.log(chalk.magenta(`[INFO] wallet balance: ${humanBalance} BNB`))
+    return humanBalance
 }
 
 async function buyAction(buyQuantity) {
@@ -142,7 +149,7 @@ tokenOut: ${(amountOutMin* 1e-18).toString()} ${tokenOut} (SA)
         return ethers.utils.formatEther(amountOutMin)
     } catch(err) {
         console.error(err)
-        process.exit()
+        // process.exit()
     }
 }
 
@@ -181,7 +188,7 @@ tokenIn: ${(amountInMin * 1e-18).toString()} ${tokenIn} (BNB)
         return ethers.utils.formatEther(amountInMin)
     } catch (err) {
         console.error(err)
-        process.exit()
+        // process.exit()
     }
 }
 
