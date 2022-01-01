@@ -1,6 +1,7 @@
 import ethers from 'ethers'
 import chalk from 'chalk'
 import dotenv from 'dotenv'
+import ora from 'ora'
 
 import { readFile } from 'fs/promises'
 const PCS_ABI = JSON.parse(await readFile(new URL('./abi/pancakeswap.json', import.meta.url)))
@@ -39,7 +40,7 @@ const factory = new ethers.Contract(
         'function getPair(address tokenA, address tokenB) external view returns (address pair)'
     ],
     account
-);
+)
 
 const router = new ethers.Contract( config.router, PCS_ABI, account )
 
@@ -47,7 +48,7 @@ const erc = new ethers.Contract(
     config.bnb,
     [{"constant": true,"inputs": [{"name": "_owner","type": "address"}],"name": "balanceOf","outputs": [{"name": "balance","type": "uint256"}],"payable": false,"type": "function"}],
     account
-);
+)
 
 async function run() {
     console.log('[INFO] RUNNING. Press ctrl+C to exit.')
@@ -73,6 +74,8 @@ async function checkLiq() {
 
     while (balance > config.walletMinBnb) {
         if (parseFloat(jmlBnb) > parseFloat(config.minBnbLiq)) {
+            console.log('toBuyValue =', toBuyValue)
+            console.log('toSellValue =', toSellValue)
             if (toBuyValue > 0) {
                 console.log('[INFO] initiating buy...')
                 toSellValue = await buyAction(toBuyValue)
@@ -84,11 +87,13 @@ async function checkLiq() {
             }
 
             let waitCount = 0
-            console.log(chalk.white.reverse(`[INFO] sleeping for ${config.tradeInterval} seconds...`))
+            console.log(chalk.white.inverse(`[INFO] sleeping for ${config.tradeInterval} seconds...`))
+            let spinner = ora('sleeping').start()
             while (waitCount < config.tradeInterval) {
                 await sleep()
                 waitCount++
             }
+            spinner.stop()
             balance = await checkBalance(account)
         } else {
             console.log('[INFO] not enough liquidity, run again...')
