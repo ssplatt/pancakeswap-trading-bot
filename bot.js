@@ -49,9 +49,10 @@ const erc = new ethers.Contract(
     account
 );
 
-const run = async () => {
+async function run() {
     console.log('[INFO] RUNNING. Press ctrl+C to exit.')
     await checkLiq()
+    console.log('[INFO] Done.')
 }
 
 async function checkLiq() {
@@ -82,8 +83,13 @@ async function checkLiq() {
                 toSellValue = 0
             }
 
-            await sleep(config.tradeInterval)
-            balance = checkBalance(account)
+            let waitCount = 0
+            console.log(chalk.white.reverse(`[INFO] sleeping for ${config.tradeInterval} seconds...`))
+            while (waitCount < config.tradeInterval) {
+                await sleep()
+                waitCount++
+            }
+            balance = await checkBalance(account)
         } else {
             console.log('[INFO] not enough liquidity, run again...')
             return await run()
@@ -174,11 +180,10 @@ tokenIn: ${(amountInMin * 1e-18).toString()} ${tokenIn} (BNB)
     }
 }
 
-function sleep(ms) {
+function sleep(ms=1000) {
     return new Promise((resolve) => {
-        console.log(chalk.white.inverse(`[INFO] sleeping: ${ms} ms`))
-        setTimeout(resolve, ms);
-    });
+        setTimeout(resolve, ms)
+    })
 }
 
 run()
