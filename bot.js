@@ -1,6 +1,7 @@
 import ethers from 'ethers'
 import chalk from 'chalk'
 import dotenv from 'dotenv'
+import ora from 'ora'
 
 import { readFile } from 'fs/promises'
 const PCS_ABI = JSON.parse(await readFile(new URL('./abi/pancakeswap.json', import.meta.url)))
@@ -22,8 +23,6 @@ const config = {
   walletMinBnb: process.env.WALLET_MIN_BNB
 }
 
-let jmlBnb = 0
-
 const wss = process.env.WSS_NODE
 const mnemonic = process.env.YOUR_MNEMONIC
 const tokenIn = config.bnb
@@ -39,7 +38,7 @@ const factory = new ethers.Contract(
         'function getPair(address tokenA, address tokenB) external view returns (address pair)'
     ],
     account
-);
+)
 
 const router = new ethers.Contract( config.router, PCS_ABI, account )
 
@@ -47,60 +46,13 @@ const erc = new ethers.Contract(
     config.bnb,
     [{"constant": true,"inputs": [{"name": "_owner","type": "address"}],"name": "balanceOf","outputs": [{"name": "balance","type": "uint256"}],"payable": false,"type": "function"}],
     account
-);
-
-async function run() {
-    console.log('[INFO] RUNNING. Press ctrl+C to exit.')
-    await checkLiq()
-    console.log('[INFO] Done.')
-}
-
-async function checkLiq() {
-    const pairAddressx = await factory.getPair(tokenIn, tokenOut)
-    console.log(chalk.blue(`pairAddress: ${pairAddressx}`))
-    if (pairAddressx !== null && pairAddressx !== undefined) {
-        if (pairAddressx.toString().indexOf('0x0000000000000') > -1) {
-            console.log(chalk.cyan(`pairAddress ${pairAddressx} not detected. Auto restart`))
-            return await run()
-        }
-    }
-    const pairBnbValue = await erc.balanceOf(pairAddressx)
-    jmlBnb = ethers.utils.formatEther(pairBnbValue)
-    console.log('value BNB:', jmlBnb)
-    let toBuyValue = config.amountOfBnb
-    let toSellValue = 0
-    let balance = checkBalance(account)
-
-    while (balance > config.walletMinBnb) {
-        if (parseFloat(jmlBnb) > parseFloat(config.minBnbLiq)) {
-            if (toBuyValue > 0) {
-                console.log('[INFO] initiating buy...')
-                toSellValue = await buyAction(toBuyValue)
-                toBuyValue = 0
-            } else if (toSellValue > 0) {
-                console.log('[INFO] initiating sell...')
-                toBuyValue = await sellAction(toSellValue)
-                toSellValue = 0
-            }
-
-            let waitCount = 0
-            console.log(chalk.white.reverse(`[INFO] sleeping for ${config.tradeInterval} seconds...`))
-            while (waitCount < config.tradeInterval) {
-                await sleep()
-                waitCount++
-            }
-            balance = await checkBalance(account)
-        } else {
-            console.log('[INFO] not enough liquidity, run again...')
-            return await run()
-        }
-    }
-}
+)
 
 async function checkBalance(account) {
     let balance = await account.getBalance()
-    console.log(chalk.magenta(`[INFO] wallet balance: ${ethers.utils.formatEther(balance)} BNB`))
-    return balance
+    let humanBalance = ethers.utils.formatEther(balance)
+    console.log(chalk.magenta(`[INFO] wallet balance: ${humanBalance} BNB`))
+    return humanBalance
 }
 
 async function buyAction(buyQuantity) {
@@ -137,7 +89,6 @@ tokenOut: ${(amountOutMin* 1e-18).toString()} ${tokenOut} (SA)
         return ethers.utils.formatEther(amountOutMin)
     } catch(err) {
         console.error(err)
-        process.exit()
     }
 }
 
@@ -148,7 +99,9 @@ async function sellAction(sellQuantity) {
         let amountInMin = 0
         const amountOut = ethers.utils.parseEther(sellQuantity)
         if ( parseInt(config.slippage) !== 0 ){
+            console.log('before amounts')
             const amounts = await router.getAmountsIn(amountOut, [tokenIn, tokenOut])
+            console.log('after amounts:', amounts)
             amountInMin = amounts[0].sub(amounts[0].div(`${config.slippage}`))
         }
 
@@ -176,7 +129,6 @@ tokenIn: ${(amountInMin * 1e-18).toString()} ${tokenIn} (BNB)
         return ethers.utils.formatEther(amountInMin)
     } catch (err) {
         console.error(err)
-        process.exit()
     }
 }
 
@@ -186,4 +138,42 @@ function sleep(ms=1000) {
     })
 }
 
-run()
+async function waitToTrade(seconds) {
+    let waitCount = 0
+    console.log(chalk.white.inverse(`[INFO] sleeping for ${seconds} seconds...`))
+    let spinner = ora('sleeping').start()
+    while (waitCount < seconds) {
+        await sleep()
+        waitCount++
+        spinner.text = `sleeping: ${waitCount}`
+    }
+    spinner.stop()
+    return
+}
+
+async function makeSwap(balance,toBuyValue,toSellValue) {
+    if (balance > config.walletMinBnb) {
+        console.log('toBuyValue =', toBuyValue)
+        console.log('toSellValue =', toSellValue)
+        if (toSellValue > 0) {
+            console.log('[INFO] initiating sell...')
+            toBuyValue = await sellAction(toSellValue)
+            toSellValue = 0
+        } else if (toBuyValue > 0) {
+            console.log('[INFO] initiating buy...')
+            toSellValue = await buyAction(toBuyValue)
+            toBuyValue = 0
+        } 
+        balance = await checkBalance(account)
+        await waitToTrade(config.tradeInterval)
+        await makeSwap(balance,toBuyValue,toSellValue)
+    }
+}
+
+console.log('[INFO] RUNNING. Press ctrl+C to exit.')
+let toBuyValue = config.amountOfBnb
+let toSellValue = 0
+let balance = await checkBalance(account)
+
+await makeSwap(balance,toBuyValue,toSellValue)
+console.log('[INFO] Done.')
