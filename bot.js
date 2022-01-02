@@ -23,11 +23,11 @@ const config = {
   walletMinBnb: process.env.WALLET_MIN_BNB
 }
 
-const wss = process.env.WSS_NODE
+const bsc = process.env.BSC_NODE
 const mnemonic = process.env.YOUR_MNEMONIC
 const tokenIn = config.bnb
 const tokenOut = config.toPurchase
-const provider = new ethers.providers.WebSocketProvider(wss)
+const provider = new ethers.providers.JsonRpcProvider(bsc)
 const wallet = new ethers.Wallet.fromMnemonic(mnemonic)
 const account = wallet.connect(provider)
 
