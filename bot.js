@@ -59,21 +59,20 @@ async function buyAction(buyQuantity) {
     console.log(chalk.yellow('[INFO] ready to buy'))
     try {
         let amountOutMin = 0
-        const amountIn = ethers.utils.parseEther(buyQuantity)
+        let amountIn = ethers.utils.parseEther(buyQuantity)
         if ( parseInt(config.slippage) !== 0 ){
-            const amounts = await router.getAmountsOut(amountIn, [tokenIn, tokenOut])
+            let amounts = await router.getAmountsOut(amountIn, [tokenIn, tokenOut])
             amountOutMin = amounts[1].sub(amounts[1].div(`${config.slippage}`))
         }
 
         console.log(chalk.yellow(`
-Start to buy
 Buying Token using BNB
 =================
 tokenIn: ${(amountIn * 1e-18).toString()} ${tokenIn} (BNB)
 tokenOut: ${(amountOutMin* 1e-18).toString()} ${tokenOut} (SA)
 `))
 
-        const tx = await router.swapExactETHForTokens(
+        let tx = await router.swapExactETHForTokens(
             amountOutMin,
             [tokenIn, tokenOut],
             config.recipient,
@@ -84,7 +83,7 @@ tokenOut: ${(amountOutMin* 1e-18).toString()} ${tokenOut} (SA)
                 'nonce' : null,
                 'value' : amountIn
             })
-        const receipt = await tx.wait()
+        let receipt = await tx.wait()
         console.log(`Transaction receipt : https://www.bscscan.com/tx/${receipt.transactionHash}`)
         return ethers.utils.formatEther(amountOutMin)
     } catch(err) {
@@ -97,11 +96,9 @@ async function sellAction(sellQuantity) {
     console.log(chalk.cyan('[INFO] ready to sell'))
     try {
         let amountInMin = 0
-        const amountOut = ethers.utils.parseEther(sellQuantity)
+        let amountOut = ethers.utils.parseEther(sellQuantity)
         if ( parseInt(config.slippage) !== 0 ){
-            console.log('before amounts')
-            const amounts = await router.getAmountsIn(amountOut, [tokenIn, tokenOut])
-            console.log('after amounts:', amounts)
+            let amounts = await router.getAmountsIn(amountOut, [tokenIn, tokenOut])
             amountInMin = amounts[0].sub(amounts[0].div(`${config.slippage}`))
         }
 
@@ -113,7 +110,7 @@ tokenOut: ${(amountOut * 1e-18).toString()} ${tokenOut} (SA)
 tokenIn: ${(amountInMin * 1e-18).toString()} ${tokenIn} (BNB)
 `))
 
-        const tx = await router.swapExactTokensForETH(
+        let tx = await router.swapExactTokensForETH(
             amountOut,
             amountInMin,
             [tokenOut, tokenIn],
@@ -124,7 +121,7 @@ tokenIn: ${(amountInMin * 1e-18).toString()} ${tokenIn} (BNB)
                 'gasPrice': config.gasPrice
             })
 
-        const receipt = await tx.wait()
+        let receipt = await tx.wait()
         console.log(`Transaction receipt : https://www.bscscan.com/tx/${receipt.transactionHash}`)
         return ethers.utils.formatEther(amountInMin)
     } catch (err) {
