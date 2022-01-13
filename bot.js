@@ -14,7 +14,6 @@ const config = {
   amountOfBnb: process.env.AMOUNT_OF_BNB,
   factory: process.env.FACTORY,
   router: process.env.ROUTER,
-  recipient: process.env.YOUR_ADDRESS,
   slippage: process.env.SLIPPAGE,
   gasPrice: ethers.utils.parseUnits(`${process.env.GWEI}`, 'gwei'),
   gasLimit: process.env.GAS_LIMIT,
@@ -31,19 +30,10 @@ const provider = new ethers.providers.JsonRpcProvider(bsc)
 const wallet = new ethers.Wallet.fromMnemonic(mnemonic)
 const account = wallet.connect(provider)
 
-const factory = new ethers.Contract(
-    config.factory,
-    [
-        'event PairCreated(address indexed token0, address indexed token1, address pair, uint)',
-        'function getPair(address tokenA, address tokenB) external view returns (address pair)'
-    ],
-    account
-)
-
 const router = new ethers.Contract( config.router, PCS_ABI, account )
 
-const erc = new ethers.Contract(
-    config.bnb,
+const sa = new ethers.Contract(
+    config.toPurchase,
     [{"constant": true,"inputs": [{"name": "_owner","type": "address"}],"name": "balanceOf","outputs": [{"name": "balance","type": "uint256"}],"payable": false,"type": "function"}],
     account
 )
@@ -51,7 +41,10 @@ const erc = new ethers.Contract(
 async function checkBalance(account) {
     let balance = await account.getBalance()
     let humanBalance = ethers.utils.formatEther(balance)
+    let saBalance = await sa.balanceOf(wallet.address)
+    let saHuman = ethers.utils.formatEther(saBalance)
     console.log(chalk.magenta(`[INFO] wallet balance: ${humanBalance} BNB`))
+    console.log(chalk.magenta(`[INFO] wallet balance: ${saHuman} SA`))
     return humanBalance
 }
 
@@ -75,7 +68,7 @@ tokenOut: ${(amountOutMin* 1e-18).toString()} ${tokenOut} (SA)
         let tx = await router.swapExactETHForTokens(
             amountOutMin,
             [tokenIn, tokenOut],
-            config.recipient,
+            wallet.address,
             Date.now() + 1000 * 60 * 5, //5 minutes
             {
                 'gasLimit': config.gasLimit,
@@ -85,7 +78,18 @@ tokenOut: ${(amountOutMin* 1e-18).toString()} ${tokenOut} (SA)
             })
         let receipt = await tx.wait()
         console.log(`Transaction receipt : https://www.bscscan.com/tx/${receipt.transactionHash}`)
-        return ethers.utils.formatEther(amountOutMin)
+        // take the last swap event
+        const lastSwapEvent = receipt.logs.slice(-1)[0]
+
+        // decode the data
+        const swapInterface = new ethers.utils.Interface(['event Swap (address indexed sender, uint256 amount0In, uint256 amount1In, uint256 amount0Out, uint256 amount1Out, address indexed to)'])
+        const parsed = swapInterface.parseLog(lastSwapEvent)
+
+        // use the non zero value
+        const receivedTokens = parsed.args.amount0Out.isZero() ?  parsed.args.amount1Out : parsed.args.amount0Out
+        let tokens = ethers.utils.formatEther(receivedTokens)
+        console.log(`Swapped for tokens: ${tokens} SA`)
+        return tokens
     } catch(err) {
         console.error(err)
     }
@@ -114,7 +118,7 @@ tokenIn: ${(amountInMin * 1e-18).toString()} ${tokenIn} (BNB)
             amountOut,
             amountInMin,
             [tokenOut, tokenIn],
-            config.recipient,
+            wallet.address,
             Date.now() + 1000 * 60 * 5, //5 minutes
             {
                 'gasLimit': config.gasLimit,
@@ -123,7 +127,18 @@ tokenIn: ${(amountInMin * 1e-18).toString()} ${tokenIn} (BNB)
 
         let receipt = await tx.wait()
         console.log(`Transaction receipt : https://www.bscscan.com/tx/${receipt.transactionHash}`)
-        return ethers.utils.formatEther(amountInMin)
+        // take the last swap event
+        const lastSwapEvent = receipt.logs.slice(-2)[0]
+
+        // decode the data
+        const swapInterface = new ethers.utils.Interface(['event Swap (address indexed sender, uint256 amount0In, uint256 amount1In, uint256 amount0Out, uint256 amount1Out, address indexed to)'])
+        const parsed = swapInterface.parseLog(lastSwapEvent)
+
+        // use the non zero value
+        const receivedTokens = parsed.args.amount0Out.isZero() ?  parsed.args.amount1Out : parsed.args.amount0Out
+        let tokens = ethers.utils.formatEther(receivedTokens)
+        console.log(`Swapped for tokens: ${tokens} BNB`)
+        return tokens
     } catch (err) {
         console.error(err)
     }
