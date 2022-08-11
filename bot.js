@@ -146,6 +146,7 @@ tokenOut: ${ethers.utils.formatEther(amountOutMin).toString()} ${tokenOut} (${sa
     return tokens
   } catch(err) {
     console.error(err)
+    process.exit(1)
   }
 }
 
@@ -192,8 +193,8 @@ tokenIn: ${ethers.utils.formatEther(amountInMin).toString()} ${tokenIn} (${token
     }
     let receipt = await tx.wait()
     console.log(`Transaction receipt : https://www.bscscan.com/tx/${receipt.transactionHash}`)
-    let lastSwapEvent = receipt.logs.slice(-1)[0]
-    let swapInterface = new ethers.utils.Interface(['event Swap (address indexed sender, uint256 amount0In, uint256 amount1In, uint256 amount0Out, uint256 amount1Out, address indexed to)'])
+    let lastSwapEvent = receipt.logs.slice(3)[0]
+    let swapInterface = new ethers.utils.Interface(['event Swap(address indexed sender, uint256 amount0In, uint256 amount1In, uint256 amount0Out, uint256 amount1Out, address indexed to)'])
     let parsed = swapInterface.parseLog(lastSwapEvent)
     let receivedTokens = parsed.args.amount0Out.isZero() ?  parsed.args.amount1Out : parsed.args.amount0Out
     let tokens = ethers.utils.formatEther(receivedTokens)
@@ -201,6 +202,7 @@ tokenIn: ${ethers.utils.formatEther(amountInMin).toString()} ${tokenIn} (${token
     return tokens
   } catch (err) {
     console.error(err)
+    process.exit(1)
   }
 }
 
